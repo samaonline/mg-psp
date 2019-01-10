@@ -88,7 +88,7 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
             writer.add_image(str(count+i)+'_Output', utils.resize_singleim((imp*0.5).astype(float), 425, 904 ), 0)
             writer.add_image(str(count+i)+'_GT', utils.resize_singleim((imy*0.5).astype(float), 425, 904 ), 0)
         count += batch_size
-    OA1, OA2, meanIU1, meanIU2, rmsd = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), threshold)
+    OA1, OA2, meanIU1, meanIU2, rmsd, msOA, msOA_avg = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), threshold)
     
     print('Val Eyelid Overall Accuracy: '+str(100* np.mean(OA_all_1)))
     print('Val Atrophy Overall Accuracy: '+str(100* utils.nanmean(OA_all_2)))
@@ -113,4 +113,4 @@ if __name__ == '__main__':
     parser.add_argument('--backend', default='resnet34', type=str, metavar='XXX', help='Backend architecture')
     parser.add_argument('--data_path', default='/home/peterwg/dataset/meibo2018', type=str, metavar='XXX', help='Path to dataset folder')
     args = parser.parse_args()
-    evaluate(args.models_path, args.backend, args.batch_size, args.data_path, args.resize, args.crop)
+    evaluate(args.models_path, args.backend, args.batch_size, args.data_path, args.resize, args.crop, args.threshold)
