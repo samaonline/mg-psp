@@ -40,24 +40,37 @@ def build_network(snapshot, backend):
     net = net.cuda()
     return net, epoch
 
-def evaluate(model_path, backend, batch_size, data_path, resize):
-    net, starting_epoch = build_network(model_path, backend)
-    test_iterator = utils.load_data(os.path.join(data_path, 'test.h5'), batch_size, resize, shuffle=False)
+def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshold):
+    net, starting_epoch = build_network(models_path, backend)
+    test_iterator, names = utils.load_data_nnames(os.path.join(data_path, 'test.h5'), batch_size, resize, shuffle=False)
     
     OA_all_1 = []
     OA_all_2 = []
     meanIU_all_1 = []
     meanIU_all_2 = []
+    real_ratios = []
+    pred_ratios = []
+    y_clss = []
     writer = SummaryWriter()
     count = 0
-    for batch_idx, (x, y, y_cls) in enumerate(test_iterator):
+    for batch_idx, (x, y, y_cls) in enumerate( test_iterator ):
+        x, y = utils.center_crop(x, y, crop)
         x, y, y_cls = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda()
-        out, _ = net(x)
+        out, y_cls_pred = net(x)
         # convert to cpu
         y = y.cpu().numpy()
+        y_cls_pred = y_cls_pred.detach().cpu().numpy()
+        y_clss.append(y_cls_pred)
         out_map = np.argmax(out.detach().cpu().numpy(), axis = 1)
+
         for gt, pred in zip(y, out_map):
             OA = utils.comp_OA(gt, pred)
+            real_ratio, pred_ratio = utils.process_im(gt, pred)
+            '''if pred_ratio <= TH:
+                pred_ratio = 0
+                pred = np.unique(pred, return_counts = True)'''
+            real_ratios.append(real_ratio)
+            pred_ratios.append(pred_ratio)
             meanIU = utils.comp_meanIU(gt, pred)
             OA_all_1.append(OA[0])
             meanIU_all_1.append(meanIU[0])
@@ -65,32 +78,39 @@ def evaluate(model_path, backend, batch_size, data_path, resize):
                 OA_all_2.append(OA[1])
                 meanIU_all_2.append(meanIU[1])
             except:
-                pass
+                OA_all_2.append(None)
+                meanIU_all_2.append(None)                
+                #pass
+        
         for i, (imx, imy, imp) in enumerate(zip(x, y, out_map) ):
             imx = imx.cpu().numpy()
             writer.add_image(str(count+i)+'_Input', utils.resize_singleim(utils.unnorm_im(imx), 425, 904 ), 0)
             writer.add_image(str(count+i)+'_Output', utils.resize_singleim((imp*0.5).astype(float), 425, 904 ), 0)
             writer.add_image(str(count+i)+'_GT', utils.resize_singleim((imy*0.5).astype(float), 425, 904 ), 0)
         count += batch_size
+    OA1, OA2, meanIU1, meanIU2, rmsd = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), threshold)
+    
     print('Val Eyelid Overall Accuracy: '+str(100* np.mean(OA_all_1)))
-    print('Val Atrophy Overall Accuracy: '+str(100* np.mean(OA_all_2)))
+    print('Val Atrophy Overall Accuracy: '+str(100* utils.nanmean(OA_all_2)))
     print('Val Eyelid MeanIU: '+str(100* np.mean(meanIU_all_1)))
-    print('Val Atrophy MeanIU: '+str(100* np.mean(meanIU_all_2)))
-        
-    writer.add_scalar('data/OA_all_1', np.mean(OA_all_1), 0)
-    writer.add_scalar('data/OA_all_2', np.mean(OA_all_2), 0)
-    writer.add_scalar('data/meanIU_all_1', np.mean(meanIU_all_1), 0)
-    writer.add_scalar('data/meanIU_all_2', np.mean(meanIU_all_2), 0)
-        
+    print('Val Atrophy MeanIU: '+str(100* utils.nanmean(meanIU_all_2)))
+    #print(OA1)
+    #print(OA2)
+    #print(meanIU1)
+    #print(meanIU2)
+    #print(rmsd)
+
     writer.close()
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     #eval settings
     parser = argparse.ArgumentParser(description='Meibography Eval')
     parser.add_argument('--batch_size', default=5 , type=int, metavar='N', help='Batch size of test set')
-    parser.add_argument('--resize', default=400 , type=int, metavar='N', help='Resize image to what dimension')    
-    parser.add_argument('--model_path', type=str, metavar='XXX', help='Path to the model')
+    parser.add_argument('--resize', default=400 , type=int, metavar='N', help='Resize image to what dimension')
+    parser.add_argument('--threshold', default=0.1 , type=float, metavar='N', help='Treshold for classifying meiboscore 0')
+    parser.add_argument('--crop', default=400 , type=int, metavar='N', help='Center crop size')
+    parser.add_argument('--models_path', type=str, metavar='XXX', help='Path to the model')
     parser.add_argument('--backend', default='resnet34', type=str, metavar='XXX', help='Backend architecture')
     parser.add_argument('--data_path', default='/home/peterwg/dataset/meibo2018', type=str, metavar='XXX', help='Path to dataset folder')
     args = parser.parse_args()
-    evaluate(args.model_path, args.backend, args.batch_size, args.data_path, args.resize)
+    evaluate(args.models_path, args.backend, args.batch_size, args.data_path, args.resize, args.crop)

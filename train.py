@@ -16,6 +16,7 @@ from tensorboardX import SummaryWriter
 
 from pspnet import PSPNet
 
+sampler_dic = {'type': 'ClassAwareSampler', 'def_file': './data/ClassAwareSampler.py', 'num_samples_cls': 2}
 
 models = {
     'squeezenet': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, backend='squeezenet', inchannel = 1),
@@ -48,17 +49,18 @@ def build_network(snapshot, backend):
 @click.option('--snapshot', type=str, default=None, help='Path to pretrained weights')
 @click.option('--resize', type=int, default=420, help='Resize the original image to certain size')
 # add random crop and center crop to see if acc improves
-@click.option('--crop', type=int, default=400, help='Horizontal random crop size')
+@click.option('--crop', type=int, default=400, help='Random (train) / center (val) crop size')
+@click.option('--threshold', type=float, default=0.1, help='Treshold for classifying meiboscore 0')
 @click.option('--batch_size', type=int, default=10)
 @click.option('--batch_size_test', type=int, default=5)
 @click.option('--alpha', type=float, default=0.4, help='Coefficient for classification loss term')
-@click.option('--epochs', type=int, default=200, help='Number of training epochs to run')
+@click.option('--epochs', type=int, default=100, help='Number of training epochs to run')
 @click.option('--gpu', type=str, default='0,5', help='List of GPUs for parallel training, e.g. 0,1,2,3')
 @click.option('--start_lr', type=float, default=0.001)
-@click.option('--milestones', type=str, default='100,150,185', help='Milestones for LR decreasing')
+@click.option('--milestones', type=str, default='50,75,93', help='Milestones for LR decreasing')
 #@click.option('--name', type=str, default=None, help='Name of the exp')
 @click.option('--log_interval', type=int, default='20', help='Interval of batches to print log')
-def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, epochs, start_lr, milestones, gpu,log_interval,  crop):
+def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, epochs, start_lr, milestones, gpu,log_interval,  crop, threshold):
     #os.environ["CUDA_VISIBLE_DEVICES"] = gpu
     net, starting_epoch = build_network(snapshot, backend)
     data_path = os.path.abspath(os.path.expanduser(data_path))
@@ -75,8 +77,8 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
     '''
     #train_loader, class_weights, n_images = None, None, None
     class_weights = None
-    train_iterator = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size, resize)
-    val_iterator = utils.load_data(os.path.join(data_path, 'test.h5'), batch_size_test, resize, shuffle=False)
+    train_iterator = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size, resize, sampler_dic)
+    val_iterator, names = utils.load_data_nnames(os.path.join(data_path, 'test.h5'), batch_size_test, resize, shuffle=False)
     
     optimizer = optim.Adam(net.parameters(), lr=start_lr)
     scheduler = MultiStepLR(optimizer, milestones=[int(x) for x in milestones.split(',')])
@@ -116,14 +118,22 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
         OA_all_2 = []
         meanIU_all_1 = []
         meanIU_all_2 = []        
+        real_ratios = []
+        pred_ratios = []
+        y_clss = []
         for batch_idx, (x, y, y_cls) in enumerate(val_iterator):
             x, y = utils.center_crop(x, y, crop)
             x, y, y_cls = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda()
-            out, _ = net(x)
+            out, y_cls_pred = net(x)
+            y_cls_pred = y_cls_pred.detach().cpu().numpy()
+            y_clss.append(y_cls_pred)
             y = y.cpu().numpy()
             out_map = np.argmax(out.detach().cpu().numpy(), axis = 1)
             for gt, pred in zip(y, out_map):
                 OA = utils.comp_OA(gt, pred)
+                real_ratio, pred_ratio = utils.process_im(gt, pred)
+                real_ratios.append(real_ratio)
+                pred_ratios.append(pred_ratio)
                 meanIU = utils.comp_meanIU(gt, pred)
                 OA_all_1.append(OA[0])
                 meanIU_all_1.append(meanIU[0])
@@ -131,16 +141,24 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
                     OA_all_2.append(OA[1])
                     meanIU_all_2.append(meanIU[1])
                 except:
-                    pass
+                    OA_all_2.append(None)
+                    meanIU_all_2.append(None)
         print('Val Eyelid Overall Accuracy: '+str(np.mean(OA_all_1)))
-        print('Val Atrophy Overall Accuracy: '+str(np.mean(OA_all_2)))
+        print('Val Atrophy Overall Accuracy: '+str(utils.nanmean(OA_all_2)))
         print('Val Eyelid MeanIU: '+str(np.mean(meanIU_all_1)))
-        print('Val Atrophy MeanIU: '+str(np.mean(meanIU_all_2)))
+        print('Val Atrophy MeanIU: '+str(utils.nanmean(meanIU_all_2)))
         
+        OA1, OA2, meanIU1, meanIU2, rmsd, msOA, msOA_avg = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), threshold)
+        
+        writer.add_scalar('data/avg_meibo', msOA_avg, epoch)
+        writer.add_scalar('data/meibo0', msOA[0], epoch)
+        writer.add_scalar('data/meibo1', msOA[1], epoch)
+        writer.add_scalar('data/meibo2', msOA[2], epoch)
+        writer.add_scalar('data/meibo3', msOA[3], epoch)
         writer.add_scalar('data/OA_all_1', np.mean(OA_all_1), epoch)
-        writer.add_scalar('data/OA_all_2', np.mean(OA_all_2), epoch)
+        writer.add_scalar('data/OA_all_2', utils.nanmean(OA_all_2), epoch)
         writer.add_scalar('data/meanIU_all_1', np.mean(meanIU_all_1), epoch)
-        writer.add_scalar('data/meanIU_all_2', np.mean(meanIU_all_2), epoch)
+        writer.add_scalar('data/meanIU_all_2', utils.nanmean(meanIU_all_2), epoch)
         
     writer.export_scalars_to_json("./all_scalars.json")
     writer.close()
