@@ -82,6 +82,7 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     #msOA_ty = [ np.mean(tyms[num0] == real_ms_[num0]), np.mean(tyms[num1] == real_ms_[num1]), np.mean(tyms[num2] == real_ms_[num2]), np.mean(tyms[num3] == real_ms_[num3]) ]
     msOA_comp = [np.mean(pred_ms_[num0] == real_ms_[num0]), np.mean(pred_ms_[num1] == real_ms_[num1]), np.mean(pred_ms_[num2] == real_ms_[num2]), np.mean(pred_ms_[num3] == real_ms_[num3]) ]
     print(msOA_comp, np.mean(pred_ms_ == real_ms_) )
+    st()
     #print("Virtual vs human")
     #print(msOA_study, msOA_ty, msOA_comp)
     #print('Human confusion matrix')

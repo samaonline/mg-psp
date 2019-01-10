@@ -148,6 +148,7 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
         print('Val Eyelid MeanIU: '+str(np.mean(meanIU_all_1)))
         print('Val Atrophy MeanIU: '+str(utils.nanmean(meanIU_all_2)))
         
+        st()
         OA1, OA2, meanIU1, meanIU2, rmsd, msOA, msOA_avg = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), threshold)
         
         writer.add_scalar('data/avg_meibo', msOA_avg, epoch)

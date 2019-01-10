@@ -43,7 +43,7 @@ def build_network(snapshot, backend):
 def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshold):
     net, starting_epoch = build_network(models_path, backend)
     test_iterator, names = utils.load_data_nnames(os.path.join(data_path, 'test.h5'), batch_size, resize, shuffle=False)
-    
+
     OA_all_1 = []
     OA_all_2 = []
     meanIU_all_1 = []
@@ -79,9 +79,9 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
                 meanIU_all_2.append(meanIU[1])
             except:
                 OA_all_2.append(None)
-                meanIU_all_2.append(None)                
+                meanIU_all_2.append(None)
                 #pass
-        
+
         for i, (imx, imy, imp) in enumerate(zip(x, y, out_map) ):
             imx = imx.cpu().numpy()
             writer.add_image(str(count+i)+'_Input', utils.resize_singleim(utils.unnorm_im(imx), 425, 904 ), 0)
@@ -89,7 +89,7 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
             writer.add_image(str(count+i)+'_GT', utils.resize_singleim((imy*0.5).astype(float), 425, 904 ), 0)
         count += batch_size
     OA1, OA2, meanIU1, meanIU2, rmsd, msOA, msOA_avg = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), threshold)
-    
+
     print('Val Eyelid Overall Accuracy: '+str(100* np.mean(OA_all_1)))
     print('Val Atrophy Overall Accuracy: '+str(100* utils.nanmean(OA_all_2)))
     print('Val Eyelid MeanIU: '+str(100* np.mean(meanIU_all_1)))
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     #eval settings
     parser = argparse.ArgumentParser(description='Meibography Eval')
     parser.add_argument('--batch_size', default=5 , type=int, metavar='N', help='Batch size of test set')
-    parser.add_argument('--resize', default=400 , type=int, metavar='N', help='Resize image to what dimension')
+    parser.add_argument('--resize', default=420 , type=int, metavar='N', help='Resize image to what dimension')
     parser.add_argument('--threshold', default=0.1 , type=float, metavar='N', help='Treshold for classifying meiboscore 0')
     parser.add_argument('--crop', default=400 , type=int, metavar='N', help='Center crop size')
     parser.add_argument('--models_path', type=str, metavar='XXX', help='Path to the model')
