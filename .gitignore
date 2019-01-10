@@ -1,4 +1,6 @@
 resnet*
+res*
+runs/
 restnet*
 PSPNet_*
 
