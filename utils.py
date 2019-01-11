@@ -82,6 +82,7 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     #msOA_ty = [ np.mean(tyms[num0] == real_ms_[num0]), np.mean(tyms[num1] == real_ms_[num1]), np.mean(tyms[num2] == real_ms_[num2]), np.mean(tyms[num3] == real_ms_[num3]) ]
     msOA_comp = [np.mean(pred_ms_[num0] == real_ms_[num0]), np.mean(pred_ms_[num1] == real_ms_[num1]), np.mean(pred_ms_[num2] == real_ms_[num2]), np.mean(pred_ms_[num3] == real_ms_[num3]) ]
     print(msOA_comp, np.mean(pred_ms_ == real_ms_) )
+    st()
     #print("Virtual vs human")
     #print(msOA_study, msOA_ty, msOA_comp)
     #print('Human confusion matrix')
@@ -199,13 +200,14 @@ def load_data(data_dir, batch_size, resize, sampler_defs=None, shuffle=True):
     xs = np.array(train_data['xs'])
     ys = np.array(train_data['ys'])
     y_clss = np.array(train_data['y_clss'])
+    ms = np.array(train_data['ms'])
     # data_process
     xs = resize_im(xs, resize, resize)
     xs = norm_im(xs)
     ys = resize_mask(ys, resize, resize)
     y_clss = np.concatenate((y_clss, np.ones((len(y_clss),1))), axis=-1 )
             
-    train_loader = torch.utils.data.TensorDataset(torch.from_numpy(xs).unsqueeze(1).type(torch.FloatTensor), torch.from_numpy(ys).type(torch.LongTensor), torch.from_numpy(y_clss).type(torch.FloatTensor))
+    train_loader = torch.utils.data.TensorDataset(torch.from_numpy(xs).unsqueeze(1).type(torch.FloatTensor), torch.from_numpy(ys).type(torch.LongTensor), torch.from_numpy(y_clss).type(torch.FloatTensor), torch.from_numpy(ms).type(torch.LongTensor))
     if sampler_defs:
         sampler_dic = {'sampler': imp.load_source('', sampler_defs['def_file']).get_sampler(), 
                        'num_samples_cls': sampler_defs['num_samples_cls']}
