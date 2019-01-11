@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from pdb import set_trace as st
 
 import extractors
 
@@ -41,7 +42,7 @@ class PSPUpsample(nn.Module):
 
 
 class PSPNet(nn.Module):
-    def __init__(self, n_classes=3, sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet34',
+    def __init__(self, n_classes=3, n_meiboclass=4, sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, all_feat_size=771, backend='resnet34',
                  pretrained=True, inchannel = 3):
         super().__init__()
         self.feats = getattr(extractors, backend)(pretrained, inchannel)
@@ -64,8 +65,16 @@ class PSPNet(nn.Module):
             nn.Linear(256, n_classes)
         )
 
+        self.classifier2 = nn.Sequential(
+            nn.Linear(all_feat_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_meiboclass)
+        )        
+
     def forward(self, x):
-        f, class_f = self.feats(x) 
+        f, class_f = self.feats(x)
         p = self.psp(f)
         p = self.drop_1(p)
 
@@ -79,5 +88,10 @@ class PSPNet(nn.Module):
         p = self.drop_2(p)
 
         auxiliary = F.adaptive_max_pool2d(input=class_f, output_size=(1, 1)).view(-1, class_f.size(1))
+        temp1 = F.adaptive_max_pool2d(input=f, output_size=(1, 1)).view(-1, f.size(1))
+        seg_map = self.final(p)
+        temp3 = F.adaptive_max_pool2d(input=seg_map, output_size=(1, 1)).view(-1, seg_map.size(1))
+        
+        all_feat = torch.cat((auxiliary, temp1, temp3), 1)
 
-        return self.final(p), self.classifier(auxiliary)
+        return seg_map, self.classifier(auxiliary), self.classifier2(all_feat)

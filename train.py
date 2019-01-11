@@ -22,7 +22,7 @@ models = {
     'squeezenet': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, backend='squeezenet', inchannel = 1),
     'densenet': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=1024, deep_features_size=512, backend='densenet', inchannel = 1),
     'resnet18': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, backend='resnet18', inchannel = 1),
-    'resnet34': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, backend='resnet34', inchannel = 1),
+    'resnet34': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, all_feat_size=771, backend='resnet34', inchannel = 1),
     'resnet50': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet50', inchannel = 1),
     'resnet101': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet101', inchannel = 1),
     'resnet152': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet152', inchannel = 1)
@@ -54,13 +54,14 @@ def build_network(snapshot, backend):
 @click.option('--batch_size', type=int, default=10)
 @click.option('--batch_size_test', type=int, default=5)
 @click.option('--alpha', type=float, default=0.4, help='Coefficient for classification loss term')
+@click.option('--beta', type=float, default=0.4, help='Coefficient for mg classification loss term')
 @click.option('--epochs', type=int, default=100, help='Number of training epochs to run')
 @click.option('--gpu', type=str, default='0,5', help='List of GPUs for parallel training, e.g. 0,1,2,3')
 @click.option('--start_lr', type=float, default=0.001)
 @click.option('--milestones', type=str, default='50,75,93', help='Milestones for LR decreasing')
 #@click.option('--name', type=str, default=None, help='Name of the exp')
 @click.option('--log_interval', type=int, default='20', help='Interval of batches to print log')
-def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, epochs, start_lr, milestones, gpu,log_interval,  crop, threshold):
+def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, beta, epochs, start_lr, milestones, gpu,log_interval,  crop, threshold):
     #os.environ["CUDA_VISIBLE_DEVICES"] = gpu
     net, starting_epoch = build_network(snapshot, backend)
     data_path = os.path.abspath(os.path.expanduser(data_path))
@@ -86,17 +87,18 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
     for epoch in range(starting_epoch, starting_epoch + epochs):
         seg_criterion = nn.NLLLoss(weight=class_weights)
         cls_criterion = nn.BCEWithLogitsLoss(weight=class_weights)
+        meibocls_criterion = nn.CrossEntropyLoss()
         epoch_losses = []
         #train_iterator = tqdm(loader, total=max_steps // batch_size + 1)
         net.train()
-        for batch_idx, (x, y, y_cls) in enumerate(train_iterator):
+        for batch_idx, (x, y, y_cls, ms) in enumerate(train_iterator):
             #steps += batch_size
             optimizer.zero_grad()
             x, y = utils.random_crop(x, y, crop)
-            x, y, y_cls = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda()
-            out, out_cls = net(x)
-            seg_loss, cls_loss = seg_criterion(out, y), cls_criterion(out_cls, y_cls)
-            loss = seg_loss + alpha * cls_loss
+            x, y, y_cls, ms = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda(), Variable(ms).cuda()
+            out, out_cls, feat = net(x)
+            seg_loss, cls_loss, mscls_loss = seg_criterion(out, y), cls_criterion(out_cls, y_cls), meibocls_criterion(feat, ms)
+            loss = seg_loss + alpha * cls_loss + beta * mscls_loss
             epoch_losses.append(loss.item())
             '''status = '[{0}] loss = {1:0.5f} avg = {2:0.5f}, LR = {5:0.7f}'.format(
                 epoch + 1, loss, np.mean(epoch_losses), scheduler.get_lr()[0])
