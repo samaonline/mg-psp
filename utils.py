@@ -25,25 +25,25 @@ def load_json(path):
         data = json.load(fp)
     return data
 
-def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, y_clss, threshold):
+def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, y_clss, mg_clss_gt, threshold):
     real_ratios = np.array(real_ratios)
     pred_ratios = np.array(pred_ratios)
-    real_ms = ratio2mg(real_ratios)
-    pred_ms = ratio2mg(pred_ratios, threshold)
-    #ind  = pred_ratios<= threshold
+    y_clss = np.argmax(y_clss, axis = 1)
+    #mg_clss = np.argmax(mg_clss, axis = 1)
     if threshold:
-        ind = y_clss[:,1] < threshold
-        pred_ratios[ind] = 0
+        pred_ratios[y_clss == 0] = 0
+    pred_ms = ratio2mg(pred_ratios)
     
     OA_all_1 = np.array(OA_all_1)
     OA_all_2 = np.array(OA_all_2)
     meanIU_all_1 = np.array(meanIU_all_1)
     meanIU_all_2 = np.array(meanIU_all_2)
     
-    num0 = np.where(real_ms == 0)
-    num1 = np.where(real_ms == 1)
-    num2 = np.where(real_ms == 2)
-    num3 = np.where(real_ms == 3)
+    num0 = np.where(mg_clss_gt == 0)
+    num1 = np.where(mg_clss_gt == 1)
+    num2 = np.where(mg_clss_gt == 2)
+    num3 = np.where(mg_clss_gt == 3)
+    #classification_acc = [np.mean(mg_clss[num0] == mg_clss_gt[num0]), np.mean(mg_clss[num1] == mg_clss_gt[num1]), np.mean(mg_clss[num2] == mg_clss_gt[num2]), np.mean(mg_clss[num3] == mg_clss_gt[num3]), np.mean(mg_clss == mg_clss_gt)]
     
     OA1 = [np.mean(OA_all_1[num0]), np.mean(OA_all_1[num1]),np.mean(OA_all_1[num2]),np.mean(OA_all_1[num3]) ]
     OA2 = [ nanmean(OA_all_2[num1]),nanmean(OA_all_2[num2]),nanmean(OA_all_2[num3]) ]
@@ -63,7 +63,7 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
         try:
             tyms.append(ratings[name]['tyms'])
             studyms.append(ratings[name]['studyms'])
-            real_ms_.append(real_ms[i])
+            real_ms_.append(mg_clss_gt[i])
             pred_ms_.append(pred_ms[i])
         except:
             continue
@@ -76,13 +76,12 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     num0 = np.where(real_ms_ == 0)
     num1 = np.where(real_ms_ == 1)
     num2 = np.where(real_ms_ == 2)
-    num3 = np.where(real_ms_ == 3)    
+    num3 = np.where(real_ms_ == 3)
     
     #msOA_study = [ np.mean(studyms[num0] == real_ms_[num0]), np.mean(studyms[num1] == real_ms_[num1]), np.mean(studyms[num2] == real_ms_[num2]), np.mean(studyms[num3] == real_ms_[num3]) ]
     #msOA_ty = [ np.mean(tyms[num0] == real_ms_[num0]), np.mean(tyms[num1] == real_ms_[num1]), np.mean(tyms[num2] == real_ms_[num2]), np.mean(tyms[num3] == real_ms_[num3]) ]
     msOA_comp = [np.mean(pred_ms_[num0] == real_ms_[num0]), np.mean(pred_ms_[num1] == real_ms_[num1]), np.mean(pred_ms_[num2] == real_ms_[num2]), np.mean(pred_ms_[num3] == real_ms_[num3]) ]
     print(msOA_comp, np.mean(pred_ms_ == real_ms_) )
-    st()
     #print("Virtual vs human")
     #print(msOA_study, msOA_ty, msOA_comp)
     #print('Human confusion matrix')
@@ -97,7 +96,7 @@ def nanmean(lis):
 def rmsd(real_ratios , pred_ratios):
     return np.sqrt(np.mean(( real_ratios - pred_ratios )**2))
 
-def ratio2mg(ratio, TH = 0.0001):
+def ratio2mg(ratio, TH = 0.001):
     out = []
     for i in ratio:
         if i > 0.66:
@@ -207,7 +206,7 @@ def load_data(data_dir, batch_size, resize, sampler_defs=None, shuffle=True):
     ys = resize_mask(ys, resize, resize)
     y_clss = np.concatenate((y_clss, np.ones((len(y_clss),1))), axis=-1 )
             
-    train_loader = torch.utils.data.TensorDataset(torch.from_numpy(xs).unsqueeze(1).type(torch.FloatTensor), torch.from_numpy(ys).type(torch.LongTensor), torch.from_numpy(y_clss).type(torch.FloatTensor), torch.from_numpy(ms).type(torch.LongTensor))
+    train_loader = torch.utils.data.TensorDataset(torch.from_numpy(xs).unsqueeze(1).type(torch.FloatTensor), torch.from_numpy(ys).type(torch.LongTensor), torch.from_numpy(y_clss[:,1]).type(torch.LongTensor), torch.from_numpy(ms).type(torch.LongTensor))
     if sampler_defs:
         sampler_dic = {'sampler': imp.load_source('', sampler_defs['def_file']).get_sampler(), 
                        'num_samples_cls': sampler_defs['num_samples_cls']}
@@ -225,6 +224,7 @@ def load_data_nnames(data_dir, batch_size, resize, shuffle=True):
     ys = np.array(train_data['ys'])
     y_clss = np.array(train_data['y_clss'])
     names = np.array(train_data['names'])
+    ms = np.array(train_data['ms'])
     
     # decode metas
     names_ = []
@@ -237,6 +237,6 @@ def load_data_nnames(data_dir, batch_size, resize, shuffle=True):
     ys = resize_mask(ys, resize, resize)
     y_clss = np.concatenate((y_clss, np.ones((len(y_clss),1))), axis=-1 )
             
-    train_loader = torch.utils.data.TensorDataset(torch.from_numpy(xs).unsqueeze(1).type(torch.FloatTensor), torch.from_numpy(ys).type(torch.LongTensor), torch.from_numpy(y_clss).type(torch.FloatTensor))
+    train_loader = torch.utils.data.TensorDataset(torch.from_numpy(xs).unsqueeze(1).type(torch.FloatTensor), torch.from_numpy(ys).type(torch.LongTensor), torch.from_numpy(y_clss[:,1]).type(torch.LongTensor), torch.from_numpy(ms).type(torch.LongTensor))
     train_loader_dataset = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle = shuffle)
     return train_loader_dataset, names_ 

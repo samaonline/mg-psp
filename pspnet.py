@@ -42,7 +42,7 @@ class PSPUpsample(nn.Module):
 
 
 class PSPNet(nn.Module):
-    def __init__(self, n_classes=3, n_meiboclass=4, sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, all_feat_size=771, backend='resnet34',
+    def __init__(self, n_classes=3, n_meiboclass=4, sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet34',
                  pretrained=True, inchannel = 3):
         super().__init__()
         self.feats = getattr(extractors, backend)(pretrained, inchannel)
@@ -58,15 +58,57 @@ class PSPNet(nn.Module):
             nn.Conv2d(64, n_classes, kernel_size=1),
             nn.LogSoftmax()
         )
-
-        self.classifier = nn.Sequential(
-            nn.Linear(deep_features_size, 256),
+        
+        self.encoder1 = nn.Sequential(
+            nn.Conv2d(256, 512, kernel_size=3),
+            nn.BatchNorm2d(512),
             nn.ReLU(),
-            nn.Linear(256, n_classes)
+            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
+            nn.Conv2d(512, 512, kernel_size=3),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=4, stride=3, padding=1)           
+        )
+
+        self.encoder2 = nn.Sequential(
+            nn.Conv2d(512, 512, kernel_size=3),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
+            nn.Conv2d(512, 512, kernel_size=3),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=4, stride=3, padding=1)           
+        )
+ 
+        self.encoder3 = nn.Sequential(
+            nn.Conv2d(3, 20, kernel_size=7),
+            nn.BatchNorm2d(20),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
+            nn.Conv2d(20, 40, kernel_size=5),
+            nn.BatchNorm2d(40),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
+            nn.Conv2d(40, 80, kernel_size=3),
+            nn.BatchNorm2d(80),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
+            nn.Conv2d(80, 160, kernel_size=3),
+            nn.BatchNorm2d(160),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=4, stride=3, padding=1)    
+        )
+               
+        self.classifier = nn.Sequential(
+            nn.Linear(771, 256),
+            nn.ReLU(),
+            nn.Linear(256, 2),#n_classes)
+            nn.LogSoftmax()
         )
 
         self.classifier2 = nn.Sequential(
-            nn.Linear(all_feat_size, 256),
+            nn.Linear(1184, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),
@@ -88,10 +130,10 @@ class PSPNet(nn.Module):
         p = self.drop_2(p)
 
         auxiliary = F.adaptive_max_pool2d(input=class_f, output_size=(1, 1)).view(-1, class_f.size(1))
-        temp1 = F.adaptive_max_pool2d(input=f, output_size=(1, 1)).view(-1, f.size(1))
         seg_map = self.final(p)
-        temp3 = F.adaptive_max_pool2d(input=seg_map, output_size=(1, 1)).view(-1, seg_map.size(1))
         
-        all_feat = torch.cat((auxiliary, temp1, temp3), 1)
+        temp1 = F.adaptive_max_pool2d(input=f, output_size=(1, 1)).view(-1, f.size(1))
+        temp2 = F.adaptive_max_pool2d(input=seg_map, output_size=(1, 1)).view(-1, seg_map.size(1))        
+        all_feat = torch.cat((auxiliary, temp1, temp2), 1)
 
-        return seg_map, self.classifier(auxiliary), self.classifier2(all_feat)
+        return seg_map, self.classifier(all_feat) #, self.classifier2(all_feat), all_feat
