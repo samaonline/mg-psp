@@ -53,10 +53,11 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
     y_clss = []
     writer = SummaryWriter()
     count = 0
-    for batch_idx, (x, y, y_cls) in enumerate( test_iterator ):
+    for batch_idx, (x, y, y_cls, _) in enumerate( test_iterator ):
         x, y = utils.center_crop(x, y, crop)
         x, y, y_cls = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda()
         out, y_cls_pred = net(x)
+        st()
         # convert to cpu
         y = y.cpu().numpy()
         y_cls_pred = y_cls_pred.detach().cpu().numpy()
