@@ -25,24 +25,38 @@ def load_json(path):
         data = json.load(fp)
     return data
 
-def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, y_clss, mg_clss_gt, threshold):
+def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, y_clss, mg_clss_gt, threshold, confidence_th = 0.9):
+
+    num0 = np.where(mg_clss_gt == 0)
+    num1 = np.where(mg_clss_gt == 1)
+    num2 = np.where(mg_clss_gt == 2)
+    num3 = np.where(mg_clss_gt == 3)
+    
     real_ratios = np.array(real_ratios)
     pred_ratios = np.array(pred_ratios)
-    y_clss = np.argmax(y_clss, axis = 1)
+    ind = ( (pred_ratios> 0) & (pred_ratios< threshold) ) | ((pred_ratios> 0.33-threshold) & (pred_ratios< 0.33+threshold)) |  ((pred_ratios> 0.66-threshold) & (pred_ratios< 0.66+threshold))
+    y_clss = np.exp(y_clss)
+    change_nd = np.where(ind)[0][np.max(y_clss, axis=1)[ind]> confidence_th]
+    y_clss_eval = np.argmax(y_clss, axis = 1)
     #mg_clss = np.argmax(mg_clss, axis = 1)
-    if threshold:
-        pred_ratios[y_clss == 0] = 0
+    '''if threshold:
+        pred_ratios[y_clss == 0] = 0'''
     pred_ms = ratio2mg(pred_ratios)
+    
+    ori_acc = [np.mean(pred_ms[num0] == mg_clss_gt[num0]), np.mean(pred_ms[num1] == mg_clss_gt[num1]), np.mean(pred_ms[num2] == mg_clss_gt[num2]), np.mean(pred_ms[num3] == mg_clss_gt[num3]), np.mean(pred_ms == mg_clss_gt)]
+    
+    for i in change_nd:
+        pred_ms[i] = y_clss_eval[i]
+    new_acc = [np.mean(pred_ms[num0] == mg_clss_gt[num0]), np.mean(pred_ms[num1] == mg_clss_gt[num1]), np.mean(pred_ms[num2] == mg_clss_gt[num2]), np.mean(pred_ms[num3] == mg_clss_gt[num3]), np.mean(pred_ms == mg_clss_gt)]
+    
+    print(ori_acc)
+    print(new_acc)
     
     OA_all_1 = np.array(OA_all_1)
     OA_all_2 = np.array(OA_all_2)
     meanIU_all_1 = np.array(meanIU_all_1)
     meanIU_all_2 = np.array(meanIU_all_2)
     
-    num0 = np.where(mg_clss_gt == 0)
-    num1 = np.where(mg_clss_gt == 1)
-    num2 = np.where(mg_clss_gt == 2)
-    num3 = np.where(mg_clss_gt == 3)
     #classification_acc = [np.mean(mg_clss[num0] == mg_clss_gt[num0]), np.mean(mg_clss[num1] == mg_clss_gt[num1]), np.mean(mg_clss[num2] == mg_clss_gt[num2]), np.mean(mg_clss[num3] == mg_clss_gt[num3]), np.mean(mg_clss == mg_clss_gt)]
     
     OA1 = [np.mean(OA_all_1[num0]), np.mean(OA_all_1[num1]),np.mean(OA_all_1[num2]),np.mean(OA_all_1[num3]) ]
@@ -55,7 +69,7 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     ratings = load_json("/home/peterwg/dataset/meibo2018/rating_dic.json")
     
     # computer vs human
-    tyms = []
+    '''tyms = []
     studyms = []
     real_ms_ = []
     pred_ms_ = []
@@ -80,14 +94,14 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     
     #msOA_study = [ np.mean(studyms[num0] == real_ms_[num0]), np.mean(studyms[num1] == real_ms_[num1]), np.mean(studyms[num2] == real_ms_[num2]), np.mean(studyms[num3] == real_ms_[num3]) ]
     #msOA_ty = [ np.mean(tyms[num0] == real_ms_[num0]), np.mean(tyms[num1] == real_ms_[num1]), np.mean(tyms[num2] == real_ms_[num2]), np.mean(tyms[num3] == real_ms_[num3]) ]
-    msOA_comp = [np.mean(pred_ms_[num0] == real_ms_[num0]), np.mean(pred_ms_[num1] == real_ms_[num1]), np.mean(pred_ms_[num2] == real_ms_[num2]), np.mean(pred_ms_[num3] == real_ms_[num3]) ]
-    print(msOA_comp, np.mean(pred_ms_ == real_ms_) )
+    msOA_comp = [np.mean(pred_ms_[num0] == real_ms_[num0]), np.mean(pred_ms_[num1] == real_ms_[num1]), np.mean(pred_ms_[num2] == real_ms_[num2]), np.mean(pred_ms_[num3] == real_ms_[num3]) ]'''
+    #print(msOA_comp, np.mean(pred_ms_ == real_ms_) )
     #print("Virtual vs human")
     #print(msOA_study, msOA_ty, msOA_comp)
     #print('Human confusion matrix')
     #print(confusion_matrix(studyms, tyms) )
     
-    return (OA1, OA2, meanIU1, meanIU2, rmsd_val, msOA_comp, np.mean(pred_ms_ == real_ms_) )
+    return (OA1, OA2, meanIU1, meanIU2, rmsd_val, ori_acc, new_acc) #msOA_comp, np.mean(pred_ms_ == real_ms_) )
     
 def nanmean(lis):
     lis_ = [i for i in list(lis) if i is not None]

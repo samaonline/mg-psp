@@ -101,9 +101,9 @@ class PSPNet(nn.Module):
         )
                
         self.classifier = nn.Sequential(
-            nn.Linear(771, 256),
+            nn.Linear(768, 256),
             nn.ReLU(),
-            nn.Linear(256, 2),#n_classes)
+            nn.Linear(256, n_meiboclass),#n_classes)
             nn.LogSoftmax()
         )
 
@@ -133,7 +133,8 @@ class PSPNet(nn.Module):
         seg_map = self.final(p)
         
         temp1 = F.adaptive_max_pool2d(input=f, output_size=(1, 1)).view(-1, f.size(1))
-        temp2 = F.adaptive_max_pool2d(input=seg_map, output_size=(1, 1)).view(-1, seg_map.size(1))        
-        all_feat = torch.cat((auxiliary, temp1, temp2), 1)
+        #temp2 = F.adaptive_max_pool2d(input=seg_map, output_size=(1, 1)).view(-1, seg_map.size(1))        
+        #all_feat = torch.cat((auxiliary, temp1, temp2), 1)
+        all_feat = torch.cat((auxiliary, temp1), 1)
 
         return seg_map, self.classifier(all_feat) #, self.classifier2(all_feat), all_feat

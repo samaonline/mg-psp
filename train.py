@@ -51,6 +51,7 @@ def build_network(snapshot, backend):
 # add random crop and center crop to see if acc improves
 @click.option('--crop', type=int, default=400, help='Random (train) / center (val) crop size')
 @click.option('--threshold', type=float, default=0.1, help='Treshold for classifying meiboscore 0')
+@click.option('--confidence_th', type=float, default=0.1, help='Treshold for confidence')
 @click.option('--batch_size', type=int, default=10)
 @click.option('--batch_size_test', type=int, default=5)
 @click.option('--alpha', type=float, default=0.1, help='Coefficient for classification loss term')
@@ -62,7 +63,7 @@ def build_network(snapshot, backend):
 @click.option('--milestones', type=str, default='100,150,185', help='Milestones for LR decreasing')
 #@click.option('--name', type=str, default=None, help='Name of the exp')
 @click.option('--log_interval', type=int, default='20', help='Interval of batches to crint log')
-def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, beta, gamma, epochs, start_lr, milestones, gpu,log_interval,  crop, threshold):
+def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, beta, gamma, epochs, start_lr, milestones, gpu,log_interval,  crop, threshold, confidence_th):
     #os.environ["CUDA_VISIBLE_DEVICES"] = gpu
     net, starting_epoch = build_network(snapshot, backend)
     data_path = os.path.abspath(os.path.expanduser(data_path))
@@ -100,7 +101,7 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
             x, y, y_cls, ms = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda(), Variable(ms).cuda()
             out, out_cls = net(x)
             #seg_loss, cls_loss, mscls_loss, ct_loss = seg_criterion(out, y), cls_criterion(out_cls, y_cls), meibocls_criterion(classifier, ms), center_loss(feat, ms)
-            seg_loss, cls_loss = seg_criterion(out, y), cls_criterion(out_cls, y_cls)
+            seg_loss, cls_loss = seg_criterion(out, y), cls_criterion(out_cls, ms)
             loss = seg_loss + alpha * cls_loss # + beta * mscls_loss + gamma * ct_loss
             epoch_losses.append(loss.item())
             '''status = '[{0}] loss = {1:0.5f} avg = {2:0.5f}, LR = {5:0.7f}'.format(
@@ -156,18 +157,19 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
         print('Val Eyelid MeanIU: '+str(np.mean(meanIU_all_1)))
         print('Val Atrophy MeanIU: '+str(utils.nanmean(meanIU_all_2)))
         
-        OA1, OA2, meanIU1, meanIU2, rmsd, msOA, msOA_avg = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), np.concatenate(mg_clss_gt), threshold)
+        OA1, OA2, meanIU1, meanIU2, rmsd, ori_acc, new_acc = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), np.concatenate(mg_clss_gt), threshold, confidence_th)
         
-        writer.add_scalar('data/avg_meibo', msOA_avg, epoch)
-        writer.add_scalar('data/meibo0', msOA[0], epoch)
-        writer.add_scalar('data/meibo1', msOA[1], epoch)
-        writer.add_scalar('data/meibo2', msOA[2], epoch)
-        writer.add_scalar('data/meibo3', msOA[3], epoch)
-        #writer.add_scalar('data/class_acc1', classification_acc[0], epoch)
-        #writer.add_scalar('data/class_acc2', classification_acc[1], epoch)
-        #writer.add_scalar('data/class_acc3', classification_acc[2], epoch)
-        #writer.add_scalar('data/class_acc4', classification_acc[3], epoch)
-        #writer.add_scalar('data/class_acc', classification_acc[-1], epoch)
+        writer.add_scalar('data/Oclass_acc1', ori_acc[0], epoch)
+        writer.add_scalar('data/Oclass_acc2', ori_acc[1], epoch)
+        writer.add_scalar('data/Oclass_acc3', ori_acc[2], epoch)
+        writer.add_scalar('data/Oclass_acc4', ori_acc[3], epoch)
+        writer.add_scalar('data/Oclass_acc', ori_acc[-1], epoch)
+        writer.add_scalar('data/Nclass_acc1', new_acc[0], epoch)
+        writer.add_scalar('data/Nclass_acc2', new_acc[1], epoch)
+        writer.add_scalar('data/Nclass_acc3', new_acc[2], epoch)
+        writer.add_scalar('data/Nclass_acc4', new_acc[3], epoch)
+        writer.add_scalar('data/Nclass_acc', new_acc[-1], epoch)        
+        
         writer.add_scalar('data/OA_all_1', np.mean(OA_all_1), epoch)
         writer.add_scalar('data/OA_all_2', utils.nanmean(OA_all_2), epoch)
         writer.add_scalar('data/meanIU_all_1', np.mean(meanIU_all_1), epoch)
