@@ -42,8 +42,8 @@ def build_network(snapshot, backend):
 
 def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshold):
     net, starting_epoch = build_network(models_path, backend)
-    test_iterator, names = utils.load_data_nnames(os.path.join(data_path, 'test.h5'), batch_size, resize, shuffle=False)
-
+    test_iterator = utils.load_data(os.path.join(data_path, 'test.h5'), batch_size, resize, shuffle=False)
+    
     OA_all_1 = []
     OA_all_2 = []
     meanIU_all_1 = []
@@ -51,19 +51,19 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
     real_ratios = []
     pred_ratios = []
     y_clss = []
+    mg_clss_gt = []
     writer = SummaryWriter()
     count = 0
-    for batch_idx, (x, y, y_cls, _) in enumerate( test_iterator ):
+    for batch_idx, (x, y, y_cls, ms) in enumerate( test_iterator ):
         x, y = utils.center_crop(x, y, crop)
         x, y, y_cls = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda()
         out, y_cls_pred = net(x)
-        st()
         # convert to cpu
         y = y.cpu().numpy()
         y_cls_pred = y_cls_pred.detach().cpu().numpy()
         y_clss.append(y_cls_pred)
         out_map = np.argmax(out.detach().cpu().numpy(), axis = 1)
-
+        mg_clss_gt.append(ms)
         for gt, pred in zip(y, out_map):
             OA = utils.comp_OA(gt, pred)
             real_ratio, pred_ratio = utils.process_im(gt, pred)
@@ -85,11 +85,11 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
 
         for i, (imx, imy, imp) in enumerate(zip(x, y, out_map) ):
             imx = imx.cpu().numpy()
-            writer.add_image(str(count+i)+'_Input', utils.resize_singleim(utils.unnorm_im(imx), 425, 904 ), 0)
-            writer.add_image(str(count+i)+'_Output', utils.resize_singleim((imp*0.5).astype(float), 425, 904 ), 0)
-            writer.add_image(str(count+i)+'_GT', utils.resize_singleim((imy*0.5).astype(float), 425, 904 ), 0)
+            writer.add_image(str(count+i)+'_Input_'+str(real_ratios[count+i]), utils.resize_singleim(utils.unnorm_im(imx), 425, 904 ), 0)
+            writer.add_image(str(count+i)+'_Output_'+str(real_ratios[count+i]), utils.resize_singleim((imp*0.5).astype(float), 425, 904 ), 0)
+            writer.add_image(str(count+i)+'_GT_'+str(real_ratios[count+i]), utils.resize_singleim((imy*0.5).astype(float), 425, 904 ), 0)
         count += batch_size
-    OA1, OA2, meanIU1, meanIU2, rmsd, msOA, msOA_avg = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, np.concatenate(y_clss), threshold)
+    OA1, OA2, meanIU1, meanIU2, rmsd, msOA, msOA_avg = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, np.concatenate(y_clss),np.concatenate(mg_clss_gt), threshold)
 
     print('Val Eyelid Overall Accuracy: '+str(100* np.mean(OA_all_1)))
     print('Val Atrophy Overall Accuracy: '+str(100* utils.nanmean(OA_all_2)))

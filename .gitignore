@@ -4,6 +4,7 @@ res*
 runs/
 restnet*
 PSPNet_*
+test/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

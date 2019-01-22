@@ -25,7 +25,7 @@ def load_json(path):
         data = json.load(fp)
     return data
 
-def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, names, y_clss, mg_clss_gt, threshold, confidence_th = 0.9):
+def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, y_clss, mg_clss_gt, threshold, confidence_th = 0.9):
 
     num0 = np.where(mg_clss_gt == 0)
     num1 = np.where(mg_clss_gt == 1)
@@ -34,6 +34,7 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     
     real_ratios = np.array(real_ratios)
     pred_ratios = np.array(pred_ratios)
+    
     ind = ( (pred_ratios> 0) & (pred_ratios< threshold) ) | ((pred_ratios> 0.33-threshold) & (pred_ratios< 0.33+threshold)) |  ((pred_ratios> 0.66-threshold) & (pred_ratios< 0.66+threshold))
     y_clss = np.exp(y_clss)
     change_nd = np.where(ind)[0][np.max(y_clss, axis=1)[ind]> confidence_th]
