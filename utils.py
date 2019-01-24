@@ -25,7 +25,7 @@ def load_json(path):
         data = json.load(fp)
     return data
 
-def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, y_clss, mg_clss_gt, threshold, confidence_th = 0.9):
+def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, y_clss, f_clss, mg_clss_gt, threshold= 0.1, confidence_th = 0.9):
 
     num0 = np.where(mg_clss_gt == 0)
     num1 = np.where(mg_clss_gt == 1)
@@ -39,6 +39,7 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     y_clss = np.exp(y_clss)
     change_nd = np.where(ind)[0][np.max(y_clss, axis=1)[ind]> confidence_th]
     y_clss_eval = np.argmax(y_clss, axis = 1)
+    f_clss_eval = np.argmax(f_clss, axis = 1)
     #mg_clss = np.argmax(mg_clss, axis = 1)
     '''if threshold:
         pred_ratios[y_clss == 0] = 0'''
@@ -48,7 +49,8 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     
     for i in change_nd:
         pred_ms[i] = y_clss_eval[i]
-    new_acc = [np.mean(pred_ms[num0] == mg_clss_gt[num0]), np.mean(pred_ms[num1] == mg_clss_gt[num1]), np.mean(pred_ms[num2] == mg_clss_gt[num2]), np.mean(pred_ms[num3] == mg_clss_gt[num3]), np.mean(pred_ms == mg_clss_gt)]
+    #new_acc = [np.mean(pred_ms[num0] == mg_clss_gt[num0]), np.mean(pred_ms[num1] == mg_clss_gt[num1]), np.mean(pred_ms[num2] == mg_clss_gt[num2]), np.mean(pred_ms[num3] == mg_clss_gt[num3]), np.mean(pred_ms == mg_clss_gt)]
+    new_acc = [np.mean(f_clss_eval[num0] == mg_clss_gt[num0]), np.mean(f_clss_eval[num1] == mg_clss_gt[num1]), np.mean(f_clss_eval[num2] == mg_clss_gt[num2]), np.mean(f_clss_eval[num3] == mg_clss_gt[num3]), np.mean(f_clss_eval == mg_clss_gt)]
     
     print(ori_acc)
     print(new_acc)
@@ -67,7 +69,7 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     meanIU2 = [nanmean(meanIU_all_2[num1]),nanmean(meanIU_all_2[num2]),nanmean(meanIU_all_2[num3]) ]
     rmsd_val = [rmsd( real_ratios[num0] , pred_ratios[num0] ), rmsd( real_ratios[num1] , pred_ratios[num1] ), rmsd( real_ratios[num2] , pred_ratios[num2] ), rmsd( real_ratios[num3] , pred_ratios[num3] )]
     
-    ratings = load_json("/home/peterwg/dataset/meibo2018/rating_dic.json")
+    #ratings = load_json("/home/peterwg/dataset/meibo2018/rating_dic.json")
     
     # computer vs human
     '''tyms = []
