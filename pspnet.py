@@ -100,20 +100,46 @@ class PSPNet(nn.Module):
             nn.MaxPool2d(kernel_size=4, stride=3, padding=1)    
         )
                
-        self.classifier = nn.Sequential(
-            nn.Linear(768, 256),
-            nn.ReLU(),
-            nn.Linear(256, n_meiboclass),#n_classes)
-        )
-
         self.classifier2 = nn.Sequential(
-            nn.Linear(773, 256),
+            nn.Linear(3072, 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, n_meiboclass)
-        )        
+            nn.ReLU(),            
+            nn.Linear(128, n_meiboclass),#n_classes)
+        )
 
+        self.classifier = nn.Sequential(
+            nn.Linear(1024, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),            
+            nn.Linear(128, n_meiboclass)
+        )
+        
+        self.classifier3 = nn.Sequential(
+            nn.Linear(2, n_meiboclass),
+        )
+        
+        self.classifierF = nn.Sequential(
+            nn.Linear(12, n_meiboclass)
+        )
+        
+        self.segcoef = nn.Sequential(
+            nn.Linear(4, 1),
+            nn.Sigmoid()
+        )
+        
+        self.clascoef = nn.Sequential(
+            nn.Linear(4, 1),
+            nn.Sigmoid()
+        )
+        
+        self.fincoef = nn.Sequential(
+            nn.Linear(4, 1),
+            nn.Sigmoid()
+        )        
     def forward(self, x):
         f, class_f = self.feats(x)
         p = self.psp(f)
@@ -135,13 +161,17 @@ class PSPNet(nn.Module):
         #temp2 = F.adaptive_max_pool2d(input=seg_map, output_size=(1, 1)).view(-1, seg_map.size(1))        
         #all_feat = torch.cat((auxiliary, temp1, temp2), 1)
         all_feat = torch.cat((auxiliary, temp1), 1)
-        classifier = self.classifier(all_feat)
+        classifier = self.classifier(auxiliary)
         
         count_temp = torch.max(seg_map, 1)[1]
         c1 = torch.sum( torch.sum(count_temp==1, dim=-1), dim=-1, keepdim = True)
         c2 = torch.sum( torch.sum(count_temp==2, dim=-1), dim=-1, keepdim = True)
-        ratio = c2.float()/ (c2 + c1).float() 
         
-        classifier_fin = torch.cat((all_feat, classifier, ratio), 1)
+        const = (seg_map.shape[-1])**2
+        c2p = c2.float()/ const
+        c1p = c1.float()/ const
+        c_all = self.classifier3(torch.cat((c2p, c1p), dim=1) )
+        feature = self.classifier2(all_feat)
         
-        return seg_map, classifier, self.classifier2(classifier_fin) #, self.classifier2(all_feat), all_feat
+        classifier_fin = self.classifierF(torch.cat((feature, classifier, c_all), 1) )
+        return seg_map, classifier, classifier_fin, self.segcoef(c_all), self.clascoef(classifier), self.fincoef(classifier_fin)  #, self.classifier2(all_feat), all_feat

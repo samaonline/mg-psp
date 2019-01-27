@@ -45,7 +45,7 @@ def build_network(snapshot, backend):
 @click.command()
 @click.option('--data_path', type=str, default='/home/peterwg/dataset/meibo2018', help='Path to dataset folder')
 @click.option('--models_path', type=str, default='./resnet34', help='Path for storing model snapshots')
-@click.option('--backend', type=str, default='resnet34', help='Feature extractor')
+@click.option('--backend', type=str, default='resnet50', help='Feature extractor')
 @click.option('--snapshot', type=str, default=None, help='Path to pretrained weights')
 @click.option('--resize', type=int, default=410, help='Resize the original image to certain size')
 # add random crop and center crop to see if acc improves
@@ -64,7 +64,7 @@ def build_network(snapshot, backend):
 #@click.option('--name', type=str, default=None, help='Name of the exp')
 @click.option('--log_interval', type=int, default='20', help='Interval of batches to crint log')
 def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, beta, gamma, epochs, start_lr, milestones, gpu,log_interval,  crop, threshold, confidence_th):
-    #os.environ["CUDA_VISIBLE_DEVICES"] = gpu
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu
     net, starting_epoch = build_network(snapshot, backend)
     data_path = os.path.abspath(os.path.expanduser(data_path))
     models_path = os.path.abspath(os.path.expanduser(models_path))
@@ -82,7 +82,7 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
     # data loading
     class_weights = None
     train_iterator = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size, resize, sampler_dic)
-    train_iterator_2 = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size_test, resize, shuffle=False)
+    #train_iterator_2 = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size_test, resize, shuffle=False)
     val_iterator = utils.load_data(os.path.join(data_path, 'test.h5'), batch_size_test, resize, shuffle=False)
     
     optimizer = optim.Adam(net.parameters(), lr=start_lr)
@@ -101,9 +101,10 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
             optimizer.zero_grad()
             x, y = utils.random_crop(x, y, crop)
             x, y, y_cls, ms = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda(), Variable(ms).cuda()
-            out, out_cls, out_cls_fin = net(x)
+            out, out_cls, out_cls_fin, seg_coef, cls_coef, fin_coef = net(x)
             seg_loss, cls_loss, mscls_loss, ct_loss = seg_criterion(out, y), cls_criterion(out_cls, ms), meibocls_criterion(out_cls_fin, ms), center_loss(out_cls_fin, ms)
             #seg_loss, cls_loss = seg_criterion(out, y), cls_criterion(out_cls, ms)
+            #loss = torch.mean(seg_coef) * seg_loss + torch.mean(cls_coef) * cls_loss + torch.mean(fin_coef) * mscls_loss + 3e-3 * ct_loss
             loss = seg_loss + alpha * cls_loss + beta * mscls_loss + gamma * ct_loss
             epoch_losses.append(loss.item())
             '''status = '[{0}] loss = {1:0.5f} avg = {2:0.5f}, LR = {5:0.7f}'.format(
@@ -121,8 +122,8 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
         writer.add_scalar('data/Train_loss', train_loss, epoch)
         print('Average loss: '+str(train_loss))
         
-        print("Evaluating Training data...")
-        eval(train_iterator_2, net, crop, writer, threshold, confidence_th, epoch, "T_")
+        #print("Evaluating Training data...")
+        #eval(train_iterator_2, net, crop, writer, threshold, confidence_th, epoch, "T_")
         print("Evaluating Validation data...")
         eval(val_iterator, net, crop, writer, threshold, confidence_th, epoch, "V_")
         
@@ -141,7 +142,7 @@ def eval(val_iterator, net, crop, writer, threshold, confidence_th, epoch, write
     for batch_idx, (x, y, y_cls, ms) in enumerate(val_iterator):
         x, y = utils.center_crop(x, y, crop)
         x, y, y_cls = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda()
-        out, y_cls_pred, out_cls_fin = net(x)
+        out, y_cls_pred, out_cls_fin, _, _, _ = net(x)
         y_cls_pred = y_cls_pred.detach().cpu().numpy()
         out_cls_fin = out_cls_fin.detach().cpu().numpy()
         #mg_cls_pred = mg_cls_pred.detach().cpu().numpy()
