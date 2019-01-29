@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from pdb import set_trace as st
+from layers.SelfAttLayer import SelfAttLayer
 
 import extractors
 
@@ -139,9 +140,17 @@ class PSPNet(nn.Module):
         self.fincoef = nn.Sequential(
             nn.Linear(4, 1),
             nn.Sigmoid()
-        )        
+        )
+        self.selfatt = SelfAttLayer(in_channels=2048)
+        self.selfatt2 = SelfAttLayer(in_channels=1024)
+        
     def forward(self, x):
         f, class_f = self.feats(x)
+        
+        # att_ori
+        #f = self.selfatt(f)
+        # att_end
+        
         p = self.psp(f)
         p = self.drop_1(p)
 
@@ -154,6 +163,11 @@ class PSPNet(nn.Module):
         p = self.up_3(p)
         p = self.drop_2(p)
 
+        # att_cls
+        f = self.selfatt(f)
+        class_f = self.selfatt2(class_f)
+        # end
+        
         auxiliary = F.adaptive_max_pool2d(input=class_f, output_size=(1, 1)).view(-1, class_f.size(1))
         seg_map = self.final(p)
         

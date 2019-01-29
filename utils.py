@@ -211,7 +211,7 @@ def comp_meanIU(y_true, y_pred):
         meanIU_all.append(IOU)
     return meanIU_all
 
-def load_data(data_dir, batch_size, resize, sampler_defs=None, shuffle=True):
+def load_data(data_dir, batch_size, resize, sampler_defs=None, shuffle=True, num_workers=4):
     train_data = h5py.File(data_dir , 'r')
     xs = np.array(train_data['xs'])
     ys = np.array(train_data['ys'])
@@ -230,9 +230,9 @@ def load_data(data_dir, batch_size, resize, sampler_defs=None, shuffle=True):
     else:
         sampler_dic = None
     if sampler_dic is not None:
-        train_loader_dataset = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle = False, sampler=sampler_dic['sampler'](sampler_dic['num_samples_cls']) )
+        train_loader_dataset = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle = False, sampler=sampler_dic['sampler'](sampler_dic['num_samples_cls']), num_workers=num_workers )
     else:
-        train_loader_dataset = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle = shuffle)        
+        train_loader_dataset = torch.utils.data.DataLoader(train_loader, batch_size=batch_size, shuffle = shuffle, num_workers=num_workers)        
     return train_loader_dataset
 
 def load_data_nnames(data_dir, batch_size, resize, shuffle=True):

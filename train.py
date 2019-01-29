@@ -53,8 +53,9 @@ def build_network(snapshot, backend):
 @click.option('--threshold', type=float, default=0.1, help='Treshold for classifying meiboscore 0')
 @click.option('--confidence_th', type=float, default=0.1, help='Treshold for confidence')
 @click.option('--batch_size', type=int, default=10)
+@click.option('--num_workers', type=int, default=4)
 @click.option('--batch_size_test', type=int, default=5)
-@click.option('--alpha', type=float, default=0.1, help='Coefficient for classification loss term')
+@click.option('--alpha', type=float, default=1.0, help='Coefficient for classification loss term')
 @click.option('--beta', type=float, default=1.0, help='Coefficient for mg classification loss term')
 @click.option('--gamma', type=float, default=3e-3, help='Coefficient for center loss term')
 @click.option('--epochs', type=int, default=150, help='Number of training epochs to run')
@@ -63,8 +64,9 @@ def build_network(snapshot, backend):
 @click.option('--milestones', type=str, default='75,113,140,150', help='Milestones for LR decreasing')
 #@click.option('--name', type=str, default=None, help='Name of the exp')
 @click.option('--log_interval', type=int, default='20', help='Interval of batches to crint log')
-def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, beta, gamma, epochs, start_lr, milestones, gpu,log_interval,  crop, threshold, confidence_th):
+def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_size_test, alpha, beta, gamma, epochs, start_lr, milestones, gpu,log_interval,  crop, threshold, confidence_th, num_workers):
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu
+    torch.set_num_threads(4)
     net, starting_epoch = build_network(snapshot, backend)
     data_path = os.path.abspath(os.path.expanduser(data_path))
     models_path = os.path.abspath(os.path.expanduser(models_path))
@@ -81,9 +83,9 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
     #train_loader, class_weights, n_images = None, None, None
     # data loading
     class_weights = None
-    train_iterator = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size, resize, sampler_dic)
+    train_iterator = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size, resize, sampler_dic, num_workers=num_workers)
     #train_iterator_2 = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size_test, resize, shuffle=False)
-    val_iterator = utils.load_data(os.path.join(data_path, 'test.h5'), batch_size_test, resize, shuffle=False)
+    val_iterator = utils.load_data(os.path.join(data_path, 'test.h5'), batch_size_test, resize, shuffle=False, num_workers=num_workers)
     
     optimizer = optim.Adam(net.parameters(), lr=start_lr)
     scheduler = MultiStepLR(optimizer, milestones=[int(x) for x in milestones.split(',')])
