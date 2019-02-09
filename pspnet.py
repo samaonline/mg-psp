@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from pdb import set_trace as st
+from layers.SelfAttLayer import SelfAttLayer
 
 import extractors
 
@@ -42,7 +42,7 @@ class PSPUpsample(nn.Module):
 
 
 class PSPNet(nn.Module):
-    def __init__(self, n_classes=3, n_meiboclass=4, sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet34',
+    def __init__(self, n_classes=3, sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet34',
                  pretrained=True, inchannel = 3):
         super().__init__()
         self.feats = getattr(extractors, backend)(pretrained, inchannel)
@@ -58,64 +58,17 @@ class PSPNet(nn.Module):
             nn.Conv2d(64, n_classes, kernel_size=1),
             nn.LogSoftmax()
         )
-        
-        self.encoder1 = nn.Sequential(
-            nn.Conv2d(256, 512, kernel_size=3),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
-            nn.Conv2d(512, 512, kernel_size=3),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=3, padding=1)           
-        )
 
-        self.encoder2 = nn.Sequential(
-            nn.Conv2d(512, 512, kernel_size=3),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
-            nn.Conv2d(512, 512, kernel_size=3),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=3, padding=1)           
-        )
- 
-        self.encoder3 = nn.Sequential(
-            nn.Conv2d(3, 20, kernel_size=7),
-            nn.BatchNorm2d(20),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
-            nn.Conv2d(20, 40, kernel_size=5),
-            nn.BatchNorm2d(40),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
-            nn.Conv2d(40, 80, kernel_size=3),
-            nn.BatchNorm2d(80),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=3, padding=1),
-            nn.Conv2d(80, 160, kernel_size=3),
-            nn.BatchNorm2d(160),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=4, stride=3, padding=1)    
-        )
-               
         self.classifier = nn.Sequential(
-            nn.Linear(768, 256),
+            nn.Linear(deep_features_size, 256),
             nn.ReLU(),
-            nn.Linear(256, n_meiboclass),#n_classes)
+            nn.Linear(256, n_classes)
         )
-
-        self.classifier2 = nn.Sequential(
-            nn.Linear(773, 256),
-            nn.ReLU(),
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Linear(128, n_meiboclass)
-        )        
+        #self.selfatt = SelfAttLayer(in_channels=2048)
 
     def forward(self, x):
-        f, class_f = self.feats(x)
+        f, class_f = self.feats(x) 
+        #f = self.selfatt(f_)
         p = self.psp(f)
         p = self.drop_1(p)
 
@@ -129,19 +82,5 @@ class PSPNet(nn.Module):
         p = self.drop_2(p)
 
         auxiliary = F.adaptive_max_pool2d(input=class_f, output_size=(1, 1)).view(-1, class_f.size(1))
-        seg_map = self.final(p)
-        
-        temp1 = F.adaptive_max_pool2d(input=f, output_size=(1, 1)).view(-1, f.size(1))
-        #temp2 = F.adaptive_max_pool2d(input=seg_map, output_size=(1, 1)).view(-1, seg_map.size(1))        
-        #all_feat = torch.cat((auxiliary, temp1, temp2), 1)
-        all_feat = torch.cat((auxiliary, temp1), 1)
-        classifier = self.classifier(all_feat)
-        
-        count_temp = torch.max(seg_map, 1)[1]
-        c1 = torch.sum( torch.sum(count_temp==1, dim=-1), dim=-1, keepdim = True)
-        c2 = torch.sum( torch.sum(count_temp==2, dim=-1), dim=-1, keepdim = True)
-        ratio = c2.float()/ (c2 + c1).float() 
-        
-        classifier_fin = torch.cat((all_feat, classifier, ratio), 1)
-        
-        return seg_map, classifier, self.classifier2(classifier_fin) #, self.classifier2(all_feat), all_feat
+
+        return self.final(p), self.classifier(auxiliary)

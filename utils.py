@@ -25,35 +25,35 @@ def load_json(path):
         data = json.load(fp)
     return data
 
-def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, y_clss, f_clss, mg_clss_gt, threshold= 0.1, confidence_th = 0.9):
+def process_add_metric(names, real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, y_clss, mg_clss_gt, threshold= 0.05, confidence_th = 0.9):
 
     num0 = np.where(mg_clss_gt == 0)
     num1 = np.where(mg_clss_gt == 1)
     num2 = np.where(mg_clss_gt == 2)
     num3 = np.where(mg_clss_gt == 3)
+    count_num = range(len(mg_clss_gt))
     
     real_ratios = np.array(real_ratios)
     pred_ratios = np.array(pred_ratios)
     
-    ind = ( (pred_ratios> 0) & (pred_ratios< threshold) ) | ((pred_ratios> 0.33-threshold) & (pred_ratios< 0.33+threshold)) |  ((pred_ratios> 0.66-threshold) & (pred_ratios< 0.66+threshold))
-    y_clss = np.exp(y_clss)
-    change_nd = np.where(ind)[0][np.max(y_clss, axis=1)[ind]> confidence_th]
-    y_clss_eval = np.argmax(y_clss, axis = 1)
-    f_clss_eval = np.argmax(f_clss, axis = 1)
+    pred_ms = ratio2mg(pred_ratios)
+      
+    #y_clss = np.exp(y_clss)
+    #change_nd = np.where(ind)[0][np.max(y_clss, axis=1)[ind]> confidence_th]
+    #f_clss_eval = np.argmax(f_clss, axis = 1)
     #mg_clss = np.argmax(mg_clss, axis = 1)
     '''if threshold:
         pred_ratios[y_clss == 0] = 0'''
-    pred_ms = ratio2mg(pred_ratios)
     
-    ori_acc = [np.mean(pred_ms[num0] == mg_clss_gt[num0]), np.mean(pred_ms[num1] == mg_clss_gt[num1]), np.mean(pred_ms[num2] == mg_clss_gt[num2]), np.mean(pred_ms[num3] == mg_clss_gt[num3]), np.mean(pred_ms == mg_clss_gt)]
+    
+    '''ori_acc = [np.mean(pred_ms[num0] == mg_clss_gt[num0]), np.mean(pred_ms[num1] == mg_clss_gt[num1]), np.mean(pred_ms[num2] == mg_clss_gt[num2]), np.mean(pred_ms[num3] == mg_clss_gt[num3]), np.mean(pred_ms == mg_clss_gt)]
     
     for i in change_nd:
-        pred_ms[i] = y_clss_eval[i]
+        pred_ms[i] = y_clss_eval[i]'''
     #new_acc = [np.mean(pred_ms[num0] == mg_clss_gt[num0]), np.mean(pred_ms[num1] == mg_clss_gt[num1]), np.mean(pred_ms[num2] == mg_clss_gt[num2]), np.mean(pred_ms[num3] == mg_clss_gt[num3]), np.mean(pred_ms == mg_clss_gt)]
-    new_acc = [np.mean(f_clss_eval[num0] == mg_clss_gt[num0]), np.mean(f_clss_eval[num1] == mg_clss_gt[num1]), np.mean(f_clss_eval[num2] == mg_clss_gt[num2]), np.mean(f_clss_eval[num3] == mg_clss_gt[num3]), np.mean(f_clss_eval == mg_clss_gt)]
+    #new_acc = [np.mean(f_clss_eval[num0] == mg_clss_gt[num0]), np.mean(f_clss_eval[num1] == mg_clss_gt[num1]), np.mean(f_clss_eval[num2] == mg_clss_gt[num2]), np.mean(f_clss_eval[num3] == mg_clss_gt[num3]), np.mean(f_clss_eval == mg_clss_gt)]
     
-    print(ori_acc)
-    print(new_acc)
+    #print(new_acc)
     
     OA_all_1 = np.array(OA_all_1)
     OA_all_2 = np.array(OA_all_2)
@@ -69,42 +69,116 @@ def process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_
     meanIU2 = [nanmean(meanIU_all_2[num1]),nanmean(meanIU_all_2[num2]),nanmean(meanIU_all_2[num3]) ]
     rmsd_val = [rmsd( real_ratios[num0] , pred_ratios[num0] ), rmsd( real_ratios[num1] , pred_ratios[num1] ), rmsd( real_ratios[num2] , pred_ratios[num2] ), rmsd( real_ratios[num3] , pred_ratios[num3] )]
     
-    #ratings = load_json("/home/peterwg/dataset/meibo2018/rating_dic.json")
+    ratings = load_json("/home/peterwg/dataset/meibo2018/rating_dic.json")
     
     # computer vs human
-    '''tyms = []
-    studyms = []
-    real_ms_ = []
-    pred_ms_ = []
-    for i, name in enumerate (names):
-        try:
-            tyms.append(ratings[name]['tyms'])
-            studyms.append(ratings[name]['studyms'])
-            real_ms_.append(mg_clss_gt[i])
-            pred_ms_.append(pred_ms[i])
-        except:
-            continue
-    tyms = np.array(tyms)
-    studyms = np.array(studyms)
-    real_ms_ = np.array(real_ms_)
-    pred_ms_ = np.array(pred_ms_)
-    #print(np.mean(studyms == real_ms_), np.mean(tyms == real_ms_), np.mean(pred_ms_ == real_ms_) )
+    ty_acc_ = []
+    study_acc_ = []
+    alg_acc_ = []
     
-    num0 = np.where(real_ms_ == 0)
-    num1 = np.where(real_ms_ == 1)
-    num2 = np.where(real_ms_ == 2)
-    num3 = np.where(real_ms_ == 3)
+    for threshold in [0, 0.0025]:#np.arange(0.00025, 0.05, 0.00025):
+        ind = ( (real_ratios> 0) & (real_ratios< threshold) ) | ((real_ratios> 0.33-threshold) & (real_ratios< 0.33+threshold)) |  ((real_ratios> 0.66-threshold) & (real_ratios< 0.66+threshold))
+        ind0 = (real_ratios> 0-threshold) & (real_ratios< threshold)
+        ind1 = (real_ratios> 0.33-threshold) & (real_ratios< 0.33+threshold)
+        ind2 = (real_ratios> 0.66-threshold) & (real_ratios< 0.66+threshold)
+        
+        tyms = []
+        studyms = []
+        real_ms_ = []
+        pred_ms_ = []
+        ind0_ = []
+        ind1_ = []
+        ind2_ = []
+        count_num_ = []
+        real_ratios_ = []
+        pred_ratios_ = []
+        for i, name in enumerate (names):
+            try:
+                tyms.append(ratings[name]['tyms'])
+                studyms.append(ratings[name]['studyms'])
+                real_ms_.append(mg_clss_gt[i])
+                pred_ms_.append(pred_ms[i])
+                ind0_.append(ind0[i])
+                ind1_.append(ind1[i])
+                ind2_.append(ind2[i])
+                count_num_.append(count_num[i])
+                real_ratios_.append(real_ratios[i])
+                pred_ratios_.append(pred_ratios[i])
+            except:
+                continue
+        tyms = np.array(tyms)
+        studyms = np.array(studyms)
+        real_ms_ = np.array(real_ms_)
+        pred_ms_ = np.array(pred_ms_)
+        real_ratios_ = np.array(real_ratios_)
+        pred_ratios_ = np.array(pred_ratios_)
+        #print(np.mean(studyms == real_ms_), np.mean(tyms == real_ms_), np.mean(pred_ms_ == real_ms_) )
+        
+        
+        #msOA_study = [ np.mean(studyms[num0] == real_ms_[num0]), np.mean(studyms[num1] == real_ms_[num1]), np.mean(studyms[num2] == real_ms_[num2]), np.mean(studyms[num3] == real_ms_[num3]) ]
+        #msOA_ty = [ np.mean(tyms[num0] == real_ms_[num0]), np.mean(tyms[num1] == real_ms_[num1]), np.mean(tyms[num2] == real_ms_[num2]), np.mean(tyms[num3] == real_ms_[num3]) ]
+        #msOA_comp = [np.mean(pred_ms_[num0] == real_ms_[num0]), np.mean(pred_ms_[num1] == real_ms_[num1]), np.mean(pred_ms_[num2] == real_ms_[num2]), np.mean(pred_ms_[num3] == real_ms_[num3]) ]
+        #print(msOA_comp, np.mean(pred_ms_ == real_ms_) )
+        #print("Virtual vs human")
+        #print(msOA_study, msOA_ty, msOA_comp)
+        #print('Human confusion matrix')
+        #print(confusion_matrix(studyms, tyms) )
+        ty_acc = compute_fuzz_acc(tyms, real_ms_, ind0_, ind1_, ind2_)
+        study_acc = compute_fuzz_acc(studyms, real_ms_, ind0_, ind1_, ind2_)
+        alg_acc = compute_fuzz_acc(pred_ms_ ,real_ms_, ind0_, ind1_, ind2_)
+        
+        ty_acc_.append(ty_acc)
+        study_acc_.append(study_acc)
+        alg_acc_.append(alg_acc)
     
-    #msOA_study = [ np.mean(studyms[num0] == real_ms_[num0]), np.mean(studyms[num1] == real_ms_[num1]), np.mean(studyms[num2] == real_ms_[num2]), np.mean(studyms[num3] == real_ms_[num3]) ]
-    #msOA_ty = [ np.mean(tyms[num0] == real_ms_[num0]), np.mean(tyms[num1] == real_ms_[num1]), np.mean(tyms[num2] == real_ms_[num2]), np.mean(tyms[num3] == real_ms_[num3]) ]
-    msOA_comp = [np.mean(pred_ms_[num0] == real_ms_[num0]), np.mean(pred_ms_[num1] == real_ms_[num1]), np.mean(pred_ms_[num2] == real_ms_[num2]), np.mean(pred_ms_[num3] == real_ms_[num3]) ]'''
-    #print(msOA_comp, np.mean(pred_ms_ == real_ms_) )
-    #print("Virtual vs human")
-    #print(msOA_study, msOA_ty, msOA_comp)
-    #print('Human confusion matrix')
-    #print(confusion_matrix(studyms, tyms) )
+    ty_acc_ = np.array(ty_acc_)
+    study_acc_ = np.array(study_acc_)
+    alg_acc_ = np.array(alg_acc_)
+
+    count_num_ = np.array(count_num_)
+    algW = [count_num_[pred_ms_ != real_ms_], pred_ratios_[pred_ms_ != real_ms_], real_ms_[pred_ms_ != real_ms_], pred_ms_[pred_ms_ != real_ms_], tyms[pred_ms_ != real_ms_], studyms[pred_ms_ != real_ms_] ]
+    tyW = [count_num_[tyms != real_ms_], pred_ratios_[tyms != real_ms_], real_ms_[tyms != real_ms_], pred_ms_[tyms != real_ms_], tyms[tyms != real_ms_], studyms[tyms != real_ms_] ]
+    print("Alg wrong****")
+    print(algW[0])
+    print(algW[1])
+    print(algW[2])
+    print(algW[3])
+    print(algW[4])
+    print(algW[5])
+    print("TY wrong****")
+    print(tyW[0])
+    print(tyW[1])
+    print(tyW[2])
+    print(tyW[3]) 
+    print(tyW[4]) 
+    print(tyW[5]) 
     
-    return (OA1, OA2, meanIU1, meanIU2, rmsd_val, ori_acc, new_acc) #msOA_comp, np.mean(pred_ms_ == real_ms_) )
+    return (OA1, OA2, meanIU1, meanIU2, rmsd_val) #msOA_comp, np.mean(pred_ms_ == real_ms_) )
+    
+def compute_fuzz_acc(pred_ms_, real_ms_, ind0_, ind1_, ind2_):
+    num_test = len(real_ms_)
+    rest = (1- (np.array(ind0_) | np.array(ind1_) |np.array(ind2_)) ).astype(bool)
+    interval = np.sum((pred_ms_[rest] == real_ms_[rest]))
+    
+    interval0 = np.sum((pred_ms_[rest] == real_ms_[rest])[real_ms_[rest] == 0])
+    interval1 = np.sum((pred_ms_[rest] == real_ms_[rest])[real_ms_[rest] == 1])
+    interval2 = np.sum((pred_ms_[rest] == real_ms_[rest])[real_ms_[rest] == 2])
+    interval3 = np.sum((pred_ms_[rest] == real_ms_[rest])[real_ms_[rest] == 3])
+    
+    th0_0 = np.sum((np.abs(real_ms_[ind0_] - pred_ms_[ind0_]) <=1)[real_ms_[ind0_] == 0])
+    th0_1 = np.sum((np.abs(real_ms_[ind0_] - pred_ms_[ind0_]) <=1)[real_ms_[ind0_] == 1])
+    th1_1 = np.sum((np.abs(real_ms_[ind1_] - pred_ms_[ind1_]) <=1)[real_ms_[ind1_] == 1])
+    th1_2 = np.sum((np.abs(real_ms_[ind1_] - pred_ms_[ind1_]) <=1)[real_ms_[ind1_] == 2])
+    th2_2 = np.sum((np.abs(real_ms_[ind2_] - pred_ms_[ind2_]) <=1)[real_ms_[ind2_] == 2])
+    th2_3 = np.sum((np.abs(real_ms_[ind2_] - pred_ms_[ind2_]) <=1)[real_ms_[ind2_] == 3])    
+
+    acc0 = (interval0+th0_0)*1.0 /(np.sum(real_ms_==0))
+    acc1 = (interval1+th0_1+th1_1)*1.0 /(np.sum(real_ms_==1))
+    acc2 = (interval2+th1_2+th2_2)*1.0 /(np.sum(real_ms_==2))
+    acc3 = (interval3+th2_3)*1.0 /(np.sum(real_ms_==3))
+    
+    return np.array([acc0, acc1, acc2, acc3, (interval+th0_0+th0_1+th1_1+th1_2+th2_2+th2_3)*1.0/num_test] )
+    
     
 def nanmean(lis):
     lis_ = [i for i in list(lis) if i is not None]

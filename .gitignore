@@ -1,7 +1,7 @@
 resnet*
 archived_models/
 res*
-runs/
+runs*
 restnet*
 PSPNet_*
 test/

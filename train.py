@@ -55,8 +55,6 @@ def build_network(snapshot, backend):
 @click.option('--batch_size', type=int, default=10)
 @click.option('--batch_size_test', type=int, default=5)
 @click.option('--alpha', type=float, default=0.1, help='Coefficient for classification loss term')
-@click.option('--beta', type=float, default=1.0, help='Coefficient for mg classification loss term')
-@click.option('--gamma', type=float, default=3e-3, help='Coefficient for center loss term')
 @click.option('--epochs', type=int, default=150, help='Number of training epochs to run')
 @click.option('--gpu', type=str, default='0,5', help='List of GPUs for parallel training, e.g. 0,1,2,3')
 @click.option('--start_lr', type=float, default=0.001)
@@ -82,9 +80,8 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
     # data loading
     class_weights = None
     train_iterator = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size, resize, sampler_dic)
-    train_iterator_2 = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size_test, resize, shuffle=False)
-    val_iterator = utils.load_data(os.path.join(data_path, 'test.h5'), batch_size_test, resize, shuffle=False)
-    
+    train_iterator = utils.load_data(os.path.join(data_path, 'train.h5'), batch_size, resize, sampler_dic)
+    val_iterator, names = utils.load_data_nnames(os.path.join(data_path, 'test.h5'), batch_size_test, resize, shuffle=False)    
     optimizer = optim.Adam(net.parameters(), lr=start_lr)
     scheduler = MultiStepLR(optimizer, milestones=[int(x) for x in milestones.split(',')])
     writer = SummaryWriter(models_path)
@@ -100,11 +97,11 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
             #steps += batch_size
             optimizer.zero_grad()
             x, y = utils.random_crop(x, y, crop)
-            x, y, y_cls, ms = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda(), Variable(ms).cuda()
-            out, out_cls, out_cls_fin = net(x)
-            seg_loss, cls_loss, mscls_loss, ct_loss = seg_criterion(out, y), cls_criterion(out_cls, ms), meibocls_criterion(out_cls_fin, ms), center_loss(out_cls_fin, ms)
+            x, y, y_cls = Variable(x).cuda(), Variable(y).cuda(), Variable(y_cls).cuda()
+            out, out_cls = net(x)
+            seg_loss, cls_loss = seg_criterion(out, y), cls_criterion(out_cls, y_cls)
             #seg_loss, cls_loss = seg_criterion(out, y), cls_criterion(out_cls, ms)
-            loss = seg_loss + alpha * cls_loss + beta * mscls_loss + gamma * ct_loss
+            loss = seg_loss + alpha * cls_loss
             epoch_losses.append(loss.item())
             '''status = '[{0}] loss = {1:0.5f} avg = {2:0.5f}, LR = {5:0.7f}'.format(
                 epoch + 1, loss, np.mean(epoch_losses), scheduler.get_lr()[0])
@@ -121,14 +118,12 @@ def train(data_path, models_path, backend, snapshot, resize, batch_size, batch_s
         writer.add_scalar('data/Train_loss', train_loss, epoch)
         print('Average loss: '+str(train_loss))
         
-        print("Evaluating Training data...")
-        eval(train_iterator_2, net, crop, writer, threshold, confidence_th, epoch, "T_")
         print("Evaluating Validation data...")
-        eval(val_iterator, net, crop, writer, threshold, confidence_th, epoch, "V_")
+        eval(names, val_iterator, net, crop, writer, threshold, confidence_th, epoch)
         
     writer.close()
 
-def eval(val_iterator, net, crop, writer, threshold, confidence_th, epoch, write_name):
+def eval(names, val_iterator, net, crop, writer, threshold, confidence_th, epoch):
     OA_all_1 = []
     OA_all_2 = []
     meanIU_all_1 = []
@@ -169,23 +164,13 @@ def eval(val_iterator, net, crop, writer, threshold, confidence_th, epoch, write
     print('Eyelid MeanIU: '+str(np.mean(meanIU_all_1)))
     print('Atrophy MeanIU: '+str(utils.nanmean(meanIU_all_2)))
     
-    OA1, OA2, meanIU1, meanIU2, rmsd, ori_acc, new_acc = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2,  np.concatenate(y_clss), np.concatenate(f_clss), np.concatenate(mg_clss_gt), threshold, confidence_th)
+    OA1, OA2, meanIU1, meanIU2, acc = utils.process_add_metric( names, real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2,  np.concatenate(y_clss), np.concatenate(mg_clss_gt))
+        
+    writer.add_scalar('data/avg_meibo', acc, epoch)
+    writer.add_scalar('data/OA_all_1', np.mean(OA_all_1), epoch)
+    writer.add_scalar('data/OA_all_2', utils.nanmean(OA_all_2), epoch)
+    writer.add_scalar('data/meanIU_all_1', np.mean(meanIU_all_1), epoch)
+    writer.add_scalar('data/meanIU_all_2', utils.nanmean(meanIU_all_2), epoch)
     
-    writer.add_scalar('data/'+write_name+'Oclass_acc1', ori_acc[0], epoch)
-    writer.add_scalar('data/'+write_name+'Oclass_acc2', ori_acc[1], epoch)
-    writer.add_scalar('data/'+write_name+'Oclass_acc3', ori_acc[2], epoch)
-    writer.add_scalar('data/'+write_name+'Oclass_acc4', ori_acc[3], epoch)
-    writer.add_scalar('data/'+write_name+'Oclass_acc', ori_acc[-1], epoch)
-    writer.add_scalar('data/'+write_name+'Nclass_acc1', new_acc[0], epoch)
-    writer.add_scalar('data/'+write_name+'Nclass_acc2', new_acc[1], epoch)
-    writer.add_scalar('data/'+write_name+'Nclass_acc3', new_acc[2], epoch)
-    writer.add_scalar('data/'+write_name+'Nclass_acc4', new_acc[3], epoch)
-    writer.add_scalar('data/'+write_name+'Nclass_acc', new_acc[-1], epoch)        
-    
-    writer.add_scalar('data/'+write_name+'OA_all_1', np.mean(OA_all_1), epoch)
-    writer.add_scalar('data/'+write_name+'OA_all_2', utils.nanmean(OA_all_2), epoch)
-    writer.add_scalar('data/'+write_name+'meanIU_all_1', np.mean(meanIU_all_1), epoch)
-    writer.add_scalar('data/'+write_name+'meanIU_all_2', utils.nanmean(meanIU_all_2), epoch)
-            
 if __name__ == '__main__':
     train()

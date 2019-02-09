@@ -42,7 +42,7 @@ def build_network(snapshot, backend):
 
 def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshold):
     net, starting_epoch = build_network(models_path, backend)
-    test_iterator = utils.load_data(os.path.join(data_path, 'test.h5'), batch_size, resize, shuffle=False)
+    test_iterator, names = utils.load_data_nnames(os.path.join(data_path, 'test.h5'), batch_size, resize, shuffle=False)
     
     OA_all_1 = []
     OA_all_2 = []
@@ -64,6 +64,10 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
         y_clss.append(y_cls_pred)
         out_map = np.argmax(out.detach().cpu().numpy(), axis = 1)
         mg_clss_gt.append(ms)
+        # attention
+        #att = att.detach().cpu().numpy()
+        #att =  np.mean(att, axis = 1)
+        #att = (att/np.max(att)*255).astype(np.uint8)
         for gt, pred in zip(y, out_map):
             OA = utils.comp_OA(gt, pred)
             real_ratio, pred_ratio = utils.process_im(gt, pred)
@@ -88,8 +92,9 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
             writer.add_image(str(count+i)+'_Input_'+str(real_ratios[count+i]), utils.resize_singleim(utils.unnorm_im(imx), 425, 904 ), 0)
             writer.add_image(str(count+i)+'_Output_'+str(real_ratios[count+i]), utils.resize_singleim((imp*0.5).astype(float), 425, 904 ), 0)
             writer.add_image(str(count+i)+'_GT_'+str(real_ratios[count+i]), utils.resize_singleim((imy*0.5).astype(float), 425, 904 ), 0)
+            #writer.add_image(str(count+i)+'_att_'+str(real_ratios[count+i]), utils.resize_singleim((att_/np.max(att_)).astype(float), 425, 904 ), 0)
         count += batch_size
-    OA1, OA2, meanIU1, meanIU2, rmsd, msOA, msOA_avg = utils.process_add_metric(real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, np.concatenate(y_clss),np.concatenate(mg_clss_gt), threshold)
+    OA1, OA2, meanIU1, meanIU2, rmsd  = utils.process_add_metric(names, real_ratios, pred_ratios, OA_all_1, OA_all_2, meanIU_all_1, meanIU_all_2, np.concatenate(y_clss),np.concatenate(mg_clss_gt), threshold)
 
     print('Val Eyelid Overall Accuracy: '+str(100* np.mean(OA_all_1)))
     print('Val Atrophy Overall Accuracy: '+str(100* utils.nanmean(OA_all_2)))
@@ -106,7 +111,7 @@ def evaluate(models_path, backend, batch_size, data_path, resize, crop, threshol
 if __name__ == '__main__':
     #eval settings
     parser = argparse.ArgumentParser(description='Meibography Eval')
-    parser.add_argument('--batch_size', default=5 , type=int, metavar='N', help='Batch size of test set')
+    parser.add_argument('--batch_size', default=4 , type=int, metavar='N', help='Batch size of test set')
     parser.add_argument('--resize', default=420 , type=int, metavar='N', help='Resize image to what dimension')
     parser.add_argument('--threshold', default=0.1 , type=float, metavar='N', help='Treshold for classifying meiboscore 0')
     parser.add_argument('--crop', default=400 , type=int, metavar='N', help='Center crop size')
