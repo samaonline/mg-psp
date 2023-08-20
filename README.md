@@ -1,35 +1,8 @@
-# pspnet-pytorch
-PyTorch implementation of PSPNet segmentation network
+# A Deep Learning Approach for Meibomian Gland Atrophy Evaluation in Meibography Images
 
+This repository implements [A Deep Learning Approach for Meibomian Gland Atrophy Evaluation in Meibography Images](https://doi.org/10.1167/tvst.8.6.37). More specifically, the gland segmentation of meibography images.
 
-### Original paper
-
- [Pyramid Scene Parsing Network](https://arxiv.org/abs/1612.01105)
- 
-### Details
-
-This is a slightly different version - instead of direct 8x upsampling at the end I use three consequitive upsamplings for stability. 
-
-### Feature extraction
-
-Using pretrained weights for extractors - improved quality and convergence dramatically.
-
-Currently supported:
-
-* SqueezeNet
-* DenseNet-121
-* ResNet-18
-* ResNet-34
-* ResNet-50
-* ResNet-101
-* ResNet-152
-
-Planned:
-
-* DenseNet-169
-* DenseNet-201
-
-### Usage 
+## Usage 
 
 To follow the training routine in train.py you need a DataLoader that yields the tuples of the following format:
 
@@ -42,3 +15,18 @@ y - batch of groung truth seg maps,
 y\_cls - batch of 1D tensors of dimensionality N: N total number of classes, 
 
 y\_cls[i, T] = 1 if class T is present in image i, 0 otherwise
+
+## License and Citation
+The use of this software is released under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+```
+@article{wang2019deep,
+  title={A deep learning approach for meibomian gland atrophy evaluation in meibography images},
+  author={Wang, Jiayun and Yeh, Thao N and Chakraborty, Rudrasis and Stella, X Yu and Lin, Meng C},
+  journal={Translational vision science \& technology},
+  volume={8},
+  number={6},
+  pages={37--37},
+  year={2019},
+  publisher={The Association for Research in Vision and Ophthalmology}
+}
+```
